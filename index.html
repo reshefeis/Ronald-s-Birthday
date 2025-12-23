@@ -1,99 +1,277 @@
-<script>
-    // קבצי אודיו
-    const bgMusic = new Audio('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-17.mp3');
-    bgMusic.loop = true;
-    bgMusic.volume = 0.3;
-
-    // רשימת קולות
-    const sounds = {
-        lion: new Audio('https://assets.mixkit.co/active_storage/sfx/2232/2232-preview.mp3'), // שאגת אריה ברורה
-        elephant: new Audio('https://actions.google.com/sounds/v1/animals/elephant_trumpeting.ogg'),
-        monkey: new Audio('https://actions.google.com/sounds/v1/animals/monkey_clatter.ogg'),
-        applause: new Audio('https://actions.google.com/sounds/v1/human_voices/applause.ogg')
-    };
-
-    let lastMilestone = null;
-
-    function startApp() {
-        // השמעת מוזיקה וטעינה מראש של הצלילים כדי "לעקוף" חסימת דפדפן
-        bgMusic.play().catch(e => console.log("Music blocked"));
-        
-        // "דריכה" שקטה של הקולות
-        Object.values(sounds).forEach(s => {
-            s.muted = true;
-            s.play().then(() => {
-                s.pause();
-                s.muted = false;
-            }).catch(e => console.log("Preload blocked"));
-        });
-
-        document.getElementById('splash-screen').style.opacity = '0';
-        setTimeout(() => {
-            document.getElementById('splash-screen').style.display = 'none';
-            document.getElementById('mainUI').style.display = 'flex';
-        }, 800);
-    }
-
-    const TARGET_LAT = 32.078286;
-    const TARGET_LON = 34.773292;
-    let watchId = null;
-
-    function calculateDistance(lat1, lon1, lat2, lon2) {
-        const R = 6371e3; 
-        const phi1 = lat1 * Math.PI/180;
-        const phi2 = lat2 * Math.PI/180;
-        const deltaPhi = (lat2-lat1) * Math.PI/180;
-        const deltaLambda = (lon2-lon1) * Math.PI/180;
-        const a = Math.sin(deltaPhi/2) * Math.sin(deltaPhi/2) +
-                  Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda/2) * Math.sin(deltaLambda/2);
-        return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))); 
-    }
-
-    function startTracking() {
-        if (!navigator.geolocation) {
-            document.getElementById('log').innerText = "GPS NOT AVAILABLE";
-            return;
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RONALD'S WILD BIRTHDAY SAFARI</title>
+    <style>
+        :root {
+            --safari-orange: #ff8c00;
+            --safari-brown: #4e342e;
+            --safari-sand: #f4a460;
         }
 
-        document.getElementById('scanBtn').disabled = true;
-        document.getElementById('log').innerText = "SEARCHING FOR TRACKS...";
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: #1a1a1a; 
+            color: var(--safari-sand); 
+            text-align: center; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            min-height: 100vh; 
+            margin: 0; 
+            overflow: hidden;
+        }
+
+        /* --- מסך פתיחה חגיגי --- */
+        #splash-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, var(--safari-brown) 0%, #000 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.8s ease-in-out;
+        }
+
+        .splash-title {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--safari-orange);
+            text-transform: uppercase;
+            margin-bottom: 20px;
+            text-shadow: 0 0 15px rgba(255, 140, 0, 0.5);
+            padding: 0 20px;
+        }
+
+        .animal-decor { font-size: 3rem; margin: 15px; }
+
+        .init-button {
+            background: var(--safari-orange);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.3rem;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            transition: transform 0.2s;
+        }
+
+        .init-button:hover { transform: scale(1.1); background: #ffa500; }
+
+        /* --- ממשק המכ"ם --- */
+        #mainUI {
+            display: none; 
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+        }
+
+        h1 { color: var(--safari-orange); margin-top: 0; }
         
-        // שאגת אריה מיד עם הפעלת ה-GPS
-        sounds.lion.play().catch(e => console.log("Lion sound blocked"));
+        .radar-container {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            margin: 20px auto;
+        }
 
-        watchId = navigator.geolocation.watchPosition(
-            (position) => {
-                const dist = calculateDistance(position.coords.latitude, position.coords.longitude, TARGET_LAT, TARGET_LON);
-                const display = document.getElementById('displayArea');
-                const arrivalMsg = document.getElementById('arrivalContent');
-                const scanner = document.getElementById('scannerLine');
+        .radar-box { 
+            width: 100%;
+            height: 100%;
+            border: 4px solid var(--safari-orange); 
+            border-radius: 50%; 
+            position: relative; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            background: rgba(78, 52, 46, 0.4);
+            box-shadow: 0 0 30px rgba(255, 140, 0, 0.2);
+            overflow: hidden;
+        }
 
-                const currentMilestone = Math.floor(dist / 10);
-                if (lastMilestone !== null && currentMilestone < lastMilestone) {
-                    // התקרב ב-10 מטר - משמיע פיל או קוף רנדומלי
-                    const randomChoice = Math.random() > 0.5 ? sounds.elephant : sounds.monkey;
-                    randomChoice.play();
-                }
-                lastMilestone = currentMilestone;
+        .floating-animal {
+            position: absolute;
+            font-size: 1.5rem;
+            opacity: 0.6;
+            animation: float 6s infinite ease-in-out;
+        }
+        @keyframes float {
+            0%, 100% { transform: translate(0,0); }
+            50% { transform: translate(10px, -10px); }
+        }
 
-                if (dist <= 15) {
-                    display.style.display = "none";
-                    scanner.style.display = "none";
-                    arrivalMsg.style.display = "block";
-                    document.getElementById('log').innerText = "TRACKS FOUND! ENTER THE ZONE.";
-                    bgMusic.pause(); 
-                    sounds.applause.play();
-                    navigator.geolocation.clearWatch(watchId);
-                } else {
-                    display.innerHTML = Math.round(dist) + "<span style='font-size:1rem'>m</span>";
-                    document.getElementById('log').innerText = "ANIMAL TRACKS DETECTED...";
-                }
-            },
-            (err) => {
-                document.getElementById('log').innerText = "SIGNAL LOST: " + err.message;
-                document.getElementById('scanBtn').disabled = false;
-            },
-            { enableHighAccuracy: true }
-        );
-    }
-</script>
+        .scanner { 
+            position: absolute; 
+            width: 50%; 
+            height: 3px; 
+            background: linear-gradient(to right, transparent, var(--safari-orange)); 
+            top: 50%; 
+            left: 50%; 
+            transform-origin: left; 
+            animation: scan 4s linear infinite; 
+        }
+
+        @keyframes scan { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        .distance { font-size: 3.5rem; font-family: 'Courier New', Courier, monospace; color: white; z-index: 10; font-weight: bold; }
+        
+        .arrival-msg {
+            color: #fff;
+            display: none;
+            background: var(--safari-orange);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(255,255,255,0.3);
+        }
+
+        #scanBtn { 
+            background: var(--safari-orange); 
+            color: white; 
+            border: none; 
+            padding: 15px 45px; 
+            border-radius: 50px; 
+            font-weight: bold; 
+            font-size: 1.2rem; 
+            cursor: pointer; 
+            margin-top: 20px;
+        }
+
+        #log { margin-top: 15px; font-size: 0.9rem; color: #a0a0a0; }
+    </style>
+</head>
+<body>
+
+    <div id="splash-screen">
+        <div class="animal-decor">🦌 🐻 🦁</div>
+        <div class="splash-title">RONALD'S WILD<br>36th BIRTHDAY</div>
+        <p style="color: white;">עונת הציד (של המתנות) החלה!</p>
+        <button class="init-button" onclick="startApp()">START SAFARI</button>
+    </div>
+
+    <div id="mainUI">
+        <h1>🐾 BIRTHDAY RADAR</h1>
+        <div class="radar-container">
+            <div class="floating-animal" style="top: 10%; left: 20%;">🦌</div>
+            <div class="floating-animal" style="top: 15%; right: 25%;">🐻</div>
+            <div class="floating-animal" style="bottom: 20%; left: 15%;">🦊</div>
+            <div class="floating-animal" style="bottom: 10%; right: 20%;">🦉</div>
+
+            <div class="radar-box">
+                <div class="scanner" id="scannerLine"></div>
+                <div id="displayArea" class="distance">--</div>
+                
+                <div id="arrivalContent" class="arrival-msg">
+                    <div style="font-size: 2rem;">🎂 ARRIVED!</div>
+                    <div style="font-size: 1.2rem; margin-top: 10px;">FEEDING TIME:<br>08:45 - 10:45</div>
+                </div>
+            </div>
+        </div>
+        <button id="scanBtn" onclick="startTracking()">TRACK WILDLIFE</button>
+        <div id="log">PREPARING GEAR...</div>
+    </div>
+
+    <script>
+        // קבצי אודיו
+        const bgMusic = new Audio('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-17.mp3');
+        bgMusic.loop = true;
+        bgMusic.volume = 0.3;
+
+        const animalSounds = [
+            'https://actions.google.com/sounds/v1/animals/lion_roar_v2.ogg',
+            'https://actions.google.com/sounds/v1/animals/elephant_trumpeting.ogg',
+            'https://actions.google.com/sounds/v1/animals/monkey_clatter.ogg',
+            'https://actions.google.com/sounds/v1/animals/crow_caw.ogg'
+        ];
+
+        let lastMilestone = null;
+
+        function playSound(url) {
+            const audio = new Audio(url);
+            audio.play().catch(e => console.log("Audio error:", e));
+        }
+
+        function startApp() {
+            bgMusic.play().catch(e => console.log("Music blocked by browser"));
+            document.getElementById('splash-screen').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('splash-screen').style.display = 'none';
+                document.getElementById('mainUI').style.display = 'flex';
+            }, 800);
+        }
+
+        const TARGET_LAT = 32.078286;
+        const TARGET_LON = 34.773292;
+        let watchId = null;
+
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; 
+            const phi1 = lat1 * Math.PI/180;
+            const phi2 = lat2 * Math.PI/180;
+            const deltaPhi = (lat2-lat1) * Math.PI/180;
+            const deltaLambda = (lon2-lon1) * Math.PI/180;
+            const a = Math.sin(deltaPhi/2) * Math.sin(deltaPhi/2) +
+                      Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda/2) * Math.sin(deltaLambda/2);
+            return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))); 
+        }
+
+        function startTracking() {
+            if (!navigator.geolocation) {
+                document.getElementById('log').innerText = "GPS NOT AVAILABLE";
+                return;
+            }
+
+            document.getElementById('scanBtn').disabled = true;
+            document.getElementById('log').innerText = "SEARCHING FOR TRACKS...";
+            
+            // צליל ראשון כשמתחילים
+            playSound(animalSounds[0]);
+
+            watchId = navigator.geolocation.watchPosition(
+                (position) => {
+                    const dist = calculateDistance(position.coords.latitude, position.coords.longitude, TARGET_LAT, TARGET_LON);
+                    const display = document.getElementById('displayArea');
+                    const arrivalMsg = document.getElementById('arrivalContent');
+                    const scanner = document.getElementById('scannerLine');
+
+                    // לוגיקת קולות בכל 10 מטר
+                    const currentMilestone = Math.floor(dist / 10);
+                    if (lastMilestone !== null && currentMilestone < lastMilestone) {
+                        // המשתמש התקרב ב-10 מטר לפחות
+                        const randomSound = animalSounds[Math.floor(Math.random() * animalSounds.length)];
+                        playSound(randomSound);
+                    }
+                    lastMilestone = currentMilestone;
+
+                    if (dist <= 15) {
+                        display.style.display = "none";
+                        scanner.style.display = "none";
+                        arrivalMsg.style.display = "block";
+                        document.getElementById('log').innerText = "TRACKS FOUND! ENTER THE ZONE.";
+                        bgMusic.pause(); // עוצר מוזיקה בהגעה
+                        playSound('https://actions.google.com/sounds/v1/human_voices/applause.ogg'); // מחיאות כפיים
+                        navigator.geolocation.clearWatch(watchId);
+                    } else {
+                        display.innerHTML = Math.round(dist) + "<span style='font-size:1rem'>m</span>";
+                        document.getElementById('log').innerText = "ANIMAL TRACKS DETECTED...";
+                    }
+                },
+                (err) => {
+                    document.getElementById('log').innerText = "SIGNAL LOST: " + err.message;
+                    document.getElementById('scanBtn').disabled = false;
+                },
+                { enableHighAccuracy: true }
+            );
+        }
+    </script>
+</body>
+</html>
