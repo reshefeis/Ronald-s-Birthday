@@ -70,7 +70,7 @@
 
         /* --- ממשק המכ"ם --- */
         #mainUI {
-            display: none; /* מוסתר עד להתחלה */
+            display: none; 
             flex-direction: column;
             align-items: center;
             width: 100%;
@@ -99,7 +99,6 @@
             overflow: hidden;
         }
 
-        /* חיות שצפות מסביב */
         .floating-animal {
             position: absolute;
             font-size: 1.5rem;
@@ -161,7 +160,6 @@
 
     <div id="mainUI">
         <h1>🐾 BIRTHDAY RADAR</h1>
-        
         <div class="radar-container">
             <div class="floating-animal" style="top: 10%; left: 20%;">🦌</div>
             <div class="floating-animal" style="top: 15%; right: 25%;">🐻</div>
@@ -178,13 +176,32 @@
                 </div>
             </div>
         </div>
-
         <button id="scanBtn" onclick="startTracking()">TRACK WILDLIFE</button>
         <div id="log">PREPARING GEAR...</div>
     </div>
 
     <script>
+        // קבצי אודיו
+        const bgMusic = new Audio('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-17.mp3');
+        bgMusic.loop = true;
+        bgMusic.volume = 0.3;
+
+        const animalSounds = [
+            'https://actions.google.com/sounds/v1/animals/lion_roar_v2.ogg',
+            'https://actions.google.com/sounds/v1/animals/elephant_trumpeting.ogg',
+            'https://actions.google.com/sounds/v1/animals/monkey_clatter.ogg',
+            'https://actions.google.com/sounds/v1/animals/crow_caw.ogg'
+        ];
+
+        let lastMilestone = null;
+
+        function playSound(url) {
+            const audio = new Audio(url);
+            audio.play().catch(e => console.log("Audio error:", e));
+        }
+
         function startApp() {
+            bgMusic.play().catch(e => console.log("Music blocked by browser"));
             document.getElementById('splash-screen').style.opacity = '0';
             setTimeout(() => {
                 document.getElementById('splash-screen').style.display = 'none';
@@ -215,6 +232,9 @@
 
             document.getElementById('scanBtn').disabled = true;
             document.getElementById('log').innerText = "SEARCHING FOR TRACKS...";
+            
+            // צליל ראשון כשמתחילים
+            playSound(animalSounds[0]);
 
             watchId = navigator.geolocation.watchPosition(
                 (position) => {
@@ -223,11 +243,22 @@
                     const arrivalMsg = document.getElementById('arrivalContent');
                     const scanner = document.getElementById('scannerLine');
 
+                    // לוגיקת קולות בכל 10 מטר
+                    const currentMilestone = Math.floor(dist / 10);
+                    if (lastMilestone !== null && currentMilestone < lastMilestone) {
+                        // המשתמש התקרב ב-10 מטר לפחות
+                        const randomSound = animalSounds[Math.floor(Math.random() * animalSounds.length)];
+                        playSound(randomSound);
+                    }
+                    lastMilestone = currentMilestone;
+
                     if (dist <= 15) {
                         display.style.display = "none";
                         scanner.style.display = "none";
                         arrivalMsg.style.display = "block";
                         document.getElementById('log').innerText = "TRACKS FOUND! ENTER THE ZONE.";
+                        bgMusic.pause(); // עוצר מוזיקה בהגעה
+                        playSound('https://actions.google.com/sounds/v1/human_voices/applause.ogg'); // מחיאות כפיים
                         navigator.geolocation.clearWatch(watchId);
                     } else {
                         display.innerHTML = Math.round(dist) + "<span style='font-size:1rem'>m</span>";
